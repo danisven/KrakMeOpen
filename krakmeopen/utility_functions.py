@@ -1,10 +1,15 @@
 #! /usr/bin/env python3
 
-def read_file(filename):
+import pathlib
+
+def read_file(file_path):
     """
     Wrapper to read either gzipped or ordinary text file input.
     """
-    if filename.endswith('.gz'):
-        return gzip.open(filename, 'rt')
+    if not isinstance(file_path, pathlib.Path):
+        file_path = pathlib.Path(file_path)
+
+    if file_path.suffix == '.gz':
+        return gzip.open(file_path, 'rt')
     else:
-        return open(filename, 'r')
+        return open(file_path, 'r')
