@@ -10,17 +10,18 @@ from stringmeup.taxonomy import TaxonomyTree
 # Set up logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-format = '%(asctime)s: %(name)s: %(levelname)s:    %(message)s'
+format = '%(asctime)s : %(name)-12s: %(levelname)-6s    %(message)s'
 date_format = '%Y-%m-%d [%H:%M:%S]'
 formatter = logging.Formatter(fmt=format, datefmt=date_format)
 stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(formatter)
 logger.addHandler(stream_handler)
-
+logger.propagate = False
 
 class KmerCounterFaultyArgumentsError(Exception):
     """Raised when a wrong or missing argument is given at instantiation."""
     pass
+
 
 class KmerCounterNotImplementedError(Exception):
     """Raised when trying to use functionality that is not implemented yet."""
@@ -28,16 +29,40 @@ class KmerCounterNotImplementedError(Exception):
 
 
 class KmerCounter:
+    """
+    Tallies kmers from Kraken2 classifications. Tallies all kmers from all
+    reads that are classified to any tax_id within the clades rooted at the
+    supplied tax IDs.
 
-    def __init__(self, tax_id_set, names=None, nodes=None, taxonomy_tree=None):
-        self.taxonomy_tree = self.get_taxonomy(taxonomy_tree, names, nodes)
+    Creates a datastructure like so:
+        {
+            clade_root_id: collections.Counter{
+                tax_id: n_kmers
+            }
+        }
+    where clade_root_id are the tax IDs supplied to the __init__ function in
+    the tax_id_set. And the n_kmers (values) within the Counter objects are
+    the number of kmers that hit the tax_id (keys). N.B. the number of kmers
+    are tallied from all reads.
+
+    Usage:
+    kmer_counter = KmerCounter(
+        tax_id_set,
+        clade_roots2children_map,
+        children2clade_roots_map)  # Initialize
+    kmer_counter.tally_kmers(kraken2_classifications_file)  # Start counting
+    result = kmer_counter.get_tally()  # Get the result
+    """
+
+    def __init__(self, tax_id_set, clade_roots2children_map, children2clade_roots_map):
+
         self.tax_id_set = tax_id_set
         self.nfiles_processed = 0
 
         # Dictionary mappings of clade root taxIDs to children,
         # and clade children to clade root taxIDs
-        self.clade_roots2children_map, \
-        self.children2clade_roots_map = self.get_tax_id_mappings()
+        self.clade_roots2children_map = clade_roots2children_map
+        self.children2clade_roots_map = children2clade_roots_map
 
         # Main data structure to hold the kmer counts for each taxon.
         # Using the Counter class from collections. When updating it, it will
@@ -198,71 +223,3 @@ class KmerCounter:
                 taxa_kmer_dict[kmer_info[0]] += kmer_info[1]
 
         return taxa_kmer_dict
-
-    def get_tax_id_mappings(self):
-        """
-        Create a dictionary mapping of all children (and root nodes) in all clades
-        rooted at the tax_ids in the tax_id_set. The keys are the tax_ids in the
-        clades, the values are the clade root node's tax_id.
-
-        Create another dictionary where the keys are the clade tax_ids from
-        tax_id_set, and the values are sets containing the tax_ids for the members
-        of the specific clade.
-        """
-
-        logger.info('Gathering all nodes in all clades rooted at supplied taxIDs...')
-
-        # Main dictionary mappings
-        children2clade_roots_map = {}
-        clade_roots2children_map = {}
-
-        for tax_id in self.tax_id_set:
-            # Get the tax_ids that are in the clade rooted at tax_id
-            clade_tax_ids = self.taxonomy_tree.get_clade([tax_id])[tax_id]
-
-            # Create the children2root dictionary mapping for the current clade
-            clade_children2root_map = {
-                clade_tax_id: tax_id for clade_tax_id in clade_tax_ids}
-
-            # Update the main dictionary mappings to contain the tax_ids from
-            # current clade
-            children2clade_roots_map.update(clade_children2root_map)
-
-            # Update the clade roots to members dictionary mapping
-            clade_roots2children_map[tax_id] = clade_tax_ids
-
-        logger.info('Done.')
-
-        return clade_roots2children_map, children2clade_roots_map
-
-
-    def get_taxonomy(self, taxonomy_tree_input, names_input, nodes_input):
-        """
-        Use supplied TaxonomyTree instance, or create a new one from
-        the supplied names and nodes.
-        """
-
-        taxonomy_tree = None
-
-        if taxonomy_tree_input is None:
-            if (names_input is None) or (nodes_input is None):
-                msg = ("If not providing an instance of TaxonomyTree, " +
-                       "you need to supply both names and nodes files.")
-                raise KmerCounterFaultyArgumentsError(msg)
-
-            else:
-                logger.info("Building taxonomy tree.")
-                taxonomy_tree = TaxonomyTree(
-                    names_filename=names_input,
-                    nodes_filename=nodes_input,
-                )
-
-        elif isinstance(taxonomy_tree_input, TaxonomyTree):
-            taxonomy_tree = taxonomy_tree_input
-
-        else:
-            msg = ("The class of the supplied taxonomy_tree argument was not TaxonomyTree, " +
-                   "instead it was {}.".format(type(taxonomy_tree_input)))
-            raise KmerCounterFaultyArgumentsError(msg)
-
-        return taxonomy_tree
