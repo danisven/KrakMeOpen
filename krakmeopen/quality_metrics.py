@@ -2,13 +2,14 @@
 
 import logging
 import pathlib
+import pandas as pd
 from tally_kmers import KmerCounter
 from utility_functions import read_file
 from stringmeup.taxonomy import TaxonomyTree
 
 # Set up logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 format = '%(asctime)s : %(name)-12s: %(levelname)-6s    %(message)s'
 date_format = '%Y-%m-%d [%H:%M:%S]'
 formatter = logging.Formatter(fmt=format, datefmt=date_format)
@@ -30,7 +31,33 @@ class ClassificationMetricsNotImplementedError(Exception):
 
 class MetricsTabulator:
     """
-    Must give tax_id_file OR tax_id.
+    Calculates a number of metrics based on the kmer classifications from the
+    reads classified to the clades rooted at the supplied tax IDs.
+
+    The following metrics are calculated:
+    1  nkmers_total                            Total number of kmers
+    2  nkmers_classified                       Total number of classified kmers
+    3  nkmers_unclassified                     Total number of unclassified kmers
+    4  nkmers_clade                            Total number of kmers classified to any tax ID within the clade
+    5  nkmers_lineage                          Total number of kmers classified to any tax ID directly above the clade root tax ID
+    6  confidence_origin                       The confidence score for the clade, calculated as described by Kraken2
+    7  confidence_classified                   An alternative confidence score where the unclassified kmers are removed from the denominator
+    8  other_kmers_lineage_ratio               Ratio of nkmers_lineage / (nkmers_total - nkmers_clade)
+    9  other_kmers_root_ratio                  Ratio of "kmers classified to root" / (nkmers_total - nkmers_clade)
+    10 other_kmers_classified_ratio            Ratio of (nkmers_total - nkmers_clade - nkmers_unclassified) / (nkmers_total - nkmers_clade)
+    11 other_kmers_distance                    Average distance between the clade root tax ID and the tax IDs which kmers are classified to
+    12 other_kmers_distance_lineage_excluded   Like other_kmers_distance but kmers classified to tax IDs above the clade are excluded
+
+    Usage:
+    metrics_tabulator = MetricsTabulator(
+        classifications_file,
+        tax_id_file | tax_id,
+        names,
+        nodes)  # Initialize
+    metrics_df = metrics_tabulator.tabulate_metrics()  # Get metrics
+
+    metrics_df: a pandas.DataFrame object. Tax IDs are rows and metrics are
+                columns.
     """
 
     def __init__(self,
@@ -58,20 +85,26 @@ class MetricsTabulator:
 
         return taxonomy_tree
 
-    def save_metrics(self, metrics_dict, output_fn):
-        """Summarize the metrics into a pandas.DataFrame and save to file."""
+    def make_data_frame(self, a_dict):
+        """Summarize a dict into a pandas.DataFrame."""
 
-        # Output ok to write to?
-        output = self.vet_output_path(output_fn)
+        df = pd.DataFrame.from_dict(a_dict, orient='index')
+        df = df.reset_index()
+        df = df.rename(columns={'index': 'tax_id'})
 
+        return df
 
+    def get_kmer_tally(self):
+        """Returns a pandas.DataFrame object representing the self.kmer_tally"""
 
+        kmer_tally_df = self.make_data_frame(self.kmer_tally)
 
+        return kmer_tally_df
 
     def tabulate_metrics(self, tally_only=False, pickle_output=None, pickle_input=None):
         """Main loop to calculate the metrics."""
 
-        kmer_tally = self.get_kmer_tallies(pickle_input=pickle_input)
+        self.kmer_tally = self.tally_kmers(pickle_input=pickle_input)
 
         # Tally the kmers and save the result in a pickle (Not Implemented)
         if tally_only:
@@ -95,12 +128,12 @@ class MetricsTabulator:
         # Set up stuff for progress reporting
         n_taxa = len(self.tax_id_set)
         tenth = max(round(n_taxa / 10), 1)  # Report every 10th percent
-        report_points = set(range(tenth, n_taxa, tenth))
+        report_points = set(range(tenth, n_taxa+1, tenth))
 
         # Calculate metrics for each clade and store them in metrics_dict
         metrics_dict = {clade_id: None for clade_id in self.tax_id_set}
         for i, clade_id in enumerate(self.tax_id_set):
-            clade_metrics_dict = self.tabulate_clade_metrics(clade_id, kmer_tally)
+            clade_metrics_dict = self.tabulate_clade_metrics(clade_id)
 
             # Save to datastructure
             metrics_dict[clade_id] = clade_metrics_dict
@@ -112,9 +145,13 @@ class MetricsTabulator:
 
         logger.info('Finished tabulating metrics.')
 
-        return metrics_dict
+        logger.info('Converting result to table...')
+        metrics_df = self.make_data_frame(metrics_dict)
+        logger.info('Done.')
 
-    def get_kmer_tallies(self, pickle_input=None):
+        return metrics_df
+
+    def tally_kmers(self, pickle_input=None):
         """
         Get the kmer tallies from a KmerCounter object, or read a pickle.
         """
@@ -173,7 +210,7 @@ class MetricsTabulator:
 
         return clade_roots2children_map, children2clade_roots_map
 
-    def tabulate_clade_metrics(self, clade_id, kmer_tally):
+    def tabulate_clade_metrics(self, clade_id):
         """
         Function to calculate a number of metrics for the supplied clade_id.
         Uses only the number of kmers that hit throughout the taxonomy,
@@ -186,6 +223,11 @@ class MetricsTabulator:
 
         # A dictionary that will be populated with the different metrics
         metrics_dict = {
+            'nkmers_total': None,
+            'nkmers_classified': None,
+            'nkmers_unclassified': None,
+            'nkmers_clade': None,
+            'nkmers_lineage': None,
             'confidence_original': None,
             'confidence_classified': None,
             'other_kmers_lineage_ratio': None,
@@ -195,7 +237,7 @@ class MetricsTabulator:
             'other_kmers_distance_lineage_excluded': None}
 
         # Get the relevant kmers
-        clade_kmers_tally = kmer_tally[clade_id]
+        clade_kmers_tally = self.kmer_tally[clade_id]
 
         # If the tax_id has no reads classified to it, it will have no kmers to
         # operate with. Return.
@@ -244,8 +286,10 @@ class MetricsTabulator:
         # The number of kmers that have been classified to a tax_id, but not
         # within the clade
         if 0 in other_kmers:
-            num_other_kmers_classified = num_other_kmers - other_kmers[0]
+            total_kmers_unclassified = other_kmers[0]
+            num_other_kmers_classified = num_other_kmers - total_kmers_unclassified
         else:
+            total_kmers_unclassified = 0
             num_other_kmers_classified = num_other_kmers
 
         # Total classified kmers
@@ -323,6 +367,11 @@ class MetricsTabulator:
 
         # Save the values of all variables
         metrics_dict = {
+            'nkmers_total': total_kmers,
+            'nkmers_classified': total_kmers_classified,
+            'nkmers_unclassified': total_kmers_unclassified,
+            'nkmers_clade': num_clade_kmers,
+            'nkmers_lineage': num_lineage_kmers,
             'confidence_original': confidence_original,
             'confidence_classified': confidence_classified,
             'other_kmers_lineage_ratio': other_kmers_lineage_ratio,
@@ -480,12 +529,13 @@ if __name__ == '__main__':
     names = '/home/daniel/work/development/StringMeUp/data/names.dmp'
     nodes = '/home/daniel/work/development/StringMeUp/data/nodes.dmp'
     tax_id = 9606
+    tax_id_file = '/home/daniel/work/development/scratch/KrakMeOpen/tax_id_file.txt'
     # classifications_file = '/home/daniel/work/development/StringMeUp/data/Ki-2014-27-74_sample.kraken2'
     classifications_file = '/home/daniel/work/development/scratch/KrakMeOpen/Ki-2012-33-500_sample100k.kraken2'
     metrics_tabulator = MetricsTabulator(
         classifications_file=classifications_file,
-        tax_id=tax_id,
+        tax_id_file=tax_id_file,
         names=names,
         nodes=nodes)
-    result = metrics_tabulator.tabulate_metrics()
-    #metrics_tabulator.save_metrics(result)
+    metrics_df = metrics_tabulator.tabulate_metrics()
+    print(metrics_df)
