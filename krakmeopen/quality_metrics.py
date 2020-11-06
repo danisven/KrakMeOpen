@@ -476,7 +476,7 @@ class MetricsTabulator:
                 logger.debug('Validation OK.')
                 return
             else:
-                msg = ("The given file ({}) doesn't appear to be a" + \
+                msg = ("The given file ({}) doesn't appear to be a " + \
                        "kraken2 classifications file.".format(kraken2_file))
                 logger.debug('First line of input: {}'.format(line))
                 logger.debug('num_cols: {}'.format(num_cols))
@@ -523,19 +523,3 @@ class MetricsTabulator:
                 raise ClassificationMetricsFaultyArguments(msg)
             else:
                 return putative_path
-
-
-if __name__ == '__main__':
-    names = '/home/daniel/work/development/StringMeUp/data/names.dmp'
-    nodes = '/home/daniel/work/development/StringMeUp/data/nodes.dmp'
-    tax_id = 9606
-    tax_id_file = '/home/daniel/work/development/scratch/KrakMeOpen/tax_id_file.txt'
-    # classifications_file = '/home/daniel/work/development/StringMeUp/data/Ki-2014-27-74_sample.kraken2'
-    classifications_file = '/home/daniel/work/development/scratch/KrakMeOpen/Ki-2012-33-500_sample100k.kraken2'
-    metrics_tabulator = MetricsTabulator(
-        classifications_file=classifications_file,
-        tax_id_file=tax_id_file,
-        names=names,
-        nodes=nodes)
-    metrics_df = metrics_tabulator.tabulate_metrics()
-    print(metrics_df)
