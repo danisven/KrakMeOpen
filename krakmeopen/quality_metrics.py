@@ -141,7 +141,7 @@ class MetricsTabulator:
             # Progress reporting
             if (i + 1) in report_points:
                 logger.info('Processed {}/{} clades ({}%)...'.format(
-                    i+1, n_taxa, round(i+1/n_taxa*100)))
+                    i+1, n_taxa, round((i+1)/n_taxa*100)))
 
         logger.info('Finished tabulating metrics.')
 
