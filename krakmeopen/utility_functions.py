@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 import pathlib
+import gzip
 
 def read_file(file_path):
     """
