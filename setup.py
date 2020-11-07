@@ -12,15 +12,11 @@ setup(
     author='Daniel Svensson',
     author_email='daniel.svensson@umu.se',
 
-    keywords="Bioinformatics NGS kraken2",
+    keywords="Bioinformatics NGS kraken2 Metagenomics",
     classifiers=[
         'Development Status :: 5 - Beta',
         'License :: OSI Approved :: MIT',
-        'Programming Language :: Python :: 3'
-        ],
+        'Programming Language :: Python :: 3'],
     install_requires=['dataclasses'],
-    packages=find_packages(exclude=['contrib', 'docs', 'test*'], include=['stringmeup']),
-    entry_points={'console_scripts': [  'stringmeup=stringmeup.stringmeup:stringmeup',
-#                                        'kraken2-taxonomy=kraken2_confidence_recal.taxonomy:main',
-
-]})
+    packages=find_packages(exclude=['contrib', 'docs', 'test*'], include=['krakmeopen']),
+    entry_points={'console_scripts': ['krakmeopen=krakmeopen.krakmeopen:krakmeopen']})

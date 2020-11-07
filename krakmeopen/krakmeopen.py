@@ -3,7 +3,7 @@
 __version__ = "0.1.0"
 
 import argparse
-from quality_metrics import MetricsTabulator
+from krakmeopen.quality_metrics import MetricsTabulator
 
 
 def get_arguments():

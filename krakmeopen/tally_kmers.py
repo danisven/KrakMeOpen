@@ -4,7 +4,7 @@ import logging
 import pathlib
 import pickle
 from collections import Counter
-from utility_functions import read_file
+from krakmeopen.utility_functions import read_file
 from stringmeup.taxonomy import TaxonomyTree
 
 # Set up logging

@@ -3,8 +3,8 @@
 import logging
 import pathlib
 import pandas as pd
-from tally_kmers import KmerCounter
-from utility_functions import read_file
+from krakmeopen.tally_kmers import KmerCounter
+from krakmeopen.utility_functions import read_file
 from stringmeup.taxonomy import TaxonomyTree
 
 # Set up logging
