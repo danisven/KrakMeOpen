@@ -13,7 +13,7 @@ A good start is to run `krakmeopen --help`.
 
 To calculate quality metrics for a Kraken 2 classification, run:
 
-`krakmeopen --input <kraken2_classifications> --output <output_file> --names <names.dmp> --nodes <nodes.dmp> [--tax_id <tax_id> | --tax_id_file <tax_id_file>] --output_kmer_tally `
+`krakmeopen --input <kraken2_classifications> --output <output_file> --names <names.dmp> --nodes <nodes.dmp> [--tax_id <tax_id> | --tax_id_file <tax_id_file>] --output_kmer_tally <output_file>`
 
 Where:
 * _input_ is the read-by-read classifications output by Kraken 2 (or [StringMeUp]). **Required**.
