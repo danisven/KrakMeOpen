@@ -14,7 +14,7 @@ def get_arguments():
 
     parser = argparse.ArgumentParser(
         prog='KrakMeOpen',
-        usage='krakmeopen --input FILE --output FILE --names FILE --nodes FILE [--tax_id INT | --tax_id_file FILE]',
+        usage='krakmeopen --input FILE --output FILE --names FILE --nodes FILE [--tax_id INT | --tax_id_file FILE] --output_kmer_tally FILE',
         description='''
             A Kraken2 downstream analysis toolkit. More specifically, calculate
             a series of quality metrics for Kraken2 classifications.''',
@@ -35,7 +35,7 @@ def get_arguments():
         metavar='FILE',
         type=str,
         required=True,
-        help='Kraken2 read-by-read classifications file.')
+        help='Kraken2 read-by-read classifications file. Required.')
 
     # Output file
     parser.add_argument(
@@ -43,26 +43,26 @@ def get_arguments():
         metavar='FILE',
         type=str,
         required=True,
-        help='The file to write the output to.')
+        help='The file to write the output to. Required.')
 
     # The taxonomy
     parser.add_argument(
         '--names',
         metavar='FILE',
         required=True,
-        help='taxonomy names dump file (names.dmp)')
+        help='NCBI style taxonomy names dump file (names.dmp). Required.')
     parser.add_argument(
         '--nodes',
         metavar='FILE',
         required=True,
-        help='taxonomy nodes dump file (nodes.dmp)')
+        help='NCBI style taxonomy nodes dump file (nodes.dmp). Required.')
 
     # Output kmer tally to file
     parser.add_argument(
         '--output_kmer_tally',
         metavar='FILE',
         required=False,
-        help='File to output the complete kmer tally for each tax ID to.')
+        help='File to output the complete kmer tally for each tax ID to. Optional.')
 
     # Supply relevant taxonomic ID on command line, or one or multiple taxonomic IDs
     # through a text file.
