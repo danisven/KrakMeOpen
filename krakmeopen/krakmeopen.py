@@ -16,8 +16,8 @@ def get_arguments():
         prog='KrakMeOpen',
         usage='krakmeopen --input FILE --output FILE --names FILE --nodes FILE [--tax_id INT | --tax_id_file FILE]',
         description='''
-            Calculate a number of classification quality metrics at the genus
-            level from Kraken2 classifications.''',
+            A Kraken2 downstream analysis toolkit. More specifically, calculate
+            a series of quality metrics for Kraken2 classifications.''',
         epilog='''
             The metrics are calculated on the clade-level. All kmers
             from all reads that are classified to any of the nodes in the
