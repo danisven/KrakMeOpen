@@ -7,16 +7,8 @@ from collections import Counter
 from krakmeopen.utility_functions import read_file
 from stringmeup.taxonomy import TaxonomyTree
 
-# Set up logging
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-format = '%(asctime)s : %(name)-12s: %(levelname)-6s    %(message)s'
-date_format = '%Y-%m-%d [%H:%M:%S]'
-formatter = logging.Formatter(fmt=format, datefmt=date_format)
-stream_handler = logging.StreamHandler()
-stream_handler.setFormatter(formatter)
-logger.addHandler(stream_handler)
-logger.propagate = False
+
 
 class KmerCounterFaultyArgumentsError(Exception):
     """Raised when a wrong or missing argument is given at instantiation."""

@@ -1,0 +1,28 @@
+version: 1
+formatters:
+  custom_formatter:
+    (): krakmeopen.log_formatter.CustomFormatter
+    fmt: "%(asctime)s : %(name)s : %(levelname)-10s %(msg)s"  # default fmt
+    info_format: '%(asctime)s : %(levelname)-10s %(msg)s'     # INFO specific format
+    datefmt: "%Y-%m-%d [%H:%M:%S]"                            # datefmt for all levels
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: DEBUG
+    formatter: custom_formatter
+loggers:
+  krakmeopen:
+    level: DEBUG
+    handlers: [console]
+    propagate: no
+  quality_metrics:
+    level: INFO
+    handlers: [console]
+    propagate: no
+  tally_kmers:
+    level: INFO
+    handlers: [console]
+    propagate: no
+root:
+  level: INFO
+  handlers: [console]

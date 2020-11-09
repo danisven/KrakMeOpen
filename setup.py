@@ -17,6 +17,6 @@ setup(
         'Development Status :: 5 - Beta',
         'License :: OSI Approved :: MIT',
         'Programming Language :: Python :: 3'],
-    install_requires=['dataclasses'],
+    include_package_data=True,
     packages=find_packages(exclude=['contrib', 'docs', 'test*'], include=['krakmeopen']),
     entry_points={'console_scripts': ['krakmeopen=krakmeopen.krakmeopen:krakmeopen']})

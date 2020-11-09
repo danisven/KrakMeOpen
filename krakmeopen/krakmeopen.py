@@ -2,9 +2,14 @@
 
 __version__ = "0.1.0"
 
+import yaml
+import logging
+import logging.config
 import argparse
+from krakmeopen import conf
+from krakmeopen.log_formatter import CustomFormatter
 from krakmeopen.quality_metrics import MetricsTabulator
-
+import importlib.resources as pkg_resources
 
 def get_arguments():
     """
@@ -84,9 +89,18 @@ def get_arguments():
     return parser.parse_args()
 
 
+def setup_logging(log_level=logging.DEBUG):
+    conf_content = pkg_resources.read_text(conf, 'log_config.yaml')
+    log_config = yaml.safe_load(conf_content)
+    logging.config.dictConfig(log_config)
+    logger = logging.getLogger(__name__)
+    return logger
+
+
 # Main func
 def krakmeopen():
     args = get_arguments()
+    logger = setup_logging()
 
     metrics_tabulator = MetricsTabulator(
         classifications_file = args.input,
