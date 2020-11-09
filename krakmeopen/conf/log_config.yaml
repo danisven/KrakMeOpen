@@ -8,11 +8,11 @@ formatters:
 handlers:
   console:
     class: logging.StreamHandler
-    level: DEBUG
+    level: INFO
     formatter: custom_formatter
 loggers:
   krakmeopen:
-    level: DEBUG
+    level: INFO
     handlers: [console]
     propagate: no
   quality_metrics:
