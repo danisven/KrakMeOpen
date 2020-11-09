@@ -3,6 +3,7 @@
 __version__ = "0.1.0"
 
 import yaml
+import pickle
 import logging
 import logging.config
 import argparse
@@ -10,6 +11,8 @@ from krakmeopen import conf
 from krakmeopen.log_formatter import CustomFormatter
 from krakmeopen.quality_metrics import MetricsTabulator
 import importlib.resources as pkg_resources
+
+# TODO: requires pyyaml
 
 def get_arguments():
     """
@@ -19,7 +22,7 @@ def get_arguments():
 
     parser = argparse.ArgumentParser(
         prog='KrakMeOpen',
-        usage='krakmeopen --input FILE --output FILE --names FILE --nodes FILE [--tax_id INT | --tax_id_file FILE] --output_kmer_tally FILE',
+        usage='krakmeopen [--input FILE | --input_pickle FILE | --input_file_list FILE] [--output FILE | --output_pickle FILE] --names FILE --nodes FILE [--tax_id INT | --tax_id_file FILE] --kmer_tally_table FILE',
         description='''
             A Kraken2 downstream analysis toolkit. More specifically, calculate
             a series of quality metrics for Kraken2 classifications.''',
@@ -34,21 +37,45 @@ def get_arguments():
 
             Output is a tab separated file containing the metrics.''')
 
-    # Input Kraken2 classifications file
-    parser.add_argument(
+    # Input arguments
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument(
         '--input',
         metavar='FILE',
         type=str,
-        required=True,
-        help='Kraken2 read-by-read classifications file. Required.')
+        help='Kraken2 read-by-read classifications file.')
+    input_group.add_argument(
+        '--input_pickle',
+        metavar='FILE',
+        type=str,
+        help='A pickle file containing kmer tallies, produced with --output_pickle')
+    input_group.add_argument(
+        '--input_file_list',
+        metavar='FILE',
+        type=str,
+        help='''A file containing file paths to multiple pickles, one per line.
+             Will calculate metrics on the sum of kmer counts from all pickles.''')
 
-    # Output file
-    parser.add_argument(
+    # Output arguments
+    output_group = parser.add_mutually_exclusive_group(required=True)
+    output_group.add_argument(
         '--output',
         metavar='FILE',
         type=str,
-        required=True,
-        help='The file to write the output to. Required.')
+        help='The file to write the quality metrics output to.')
+    output_group.add_argument(
+        '--output_pickle',
+        metavar='FILE',
+        type=str,
+        help='''The pickle file to write kmer tallies to. Use this argument
+             to supress calculation of quality metrics and only output kmer
+             counts to a pickled file. Input the pickled file using
+             --input_pickle.''')
+    parser.add_argument(
+        '--kmer_tally_table',
+        metavar='FILE',
+        required=False,
+        help='File to output the complete kmer tally table for each tax ID to. Optional.')
 
     # The taxonomy
     parser.add_argument(
@@ -62,13 +89,6 @@ def get_arguments():
         required=True,
         help='NCBI style taxonomy nodes dump file (nodes.dmp). Required.')
 
-    # Output kmer tally to file
-    parser.add_argument(
-        '--output_kmer_tally',
-        metavar='FILE',
-        required=False,
-        help='File to output the complete kmer tally for each tax ID to. Optional.')
-
     # Supply relevant taxonomic ID on command line, or one or multiple taxonomic IDs
     # through a text file.
     tax_id_group = parser.add_mutually_exclusive_group(required=True)
@@ -81,12 +101,34 @@ def get_arguments():
         '--tax_id_file',
         metavar='FILE',
         type=str,
-        help='''
-            Supply multiple taxonomic IDs at once. A textfile with one
+        help='''Supply multiple taxonomic IDs at once. A textfile with one
             taxonomic ID per line. Calculate quality metrics for the clades
             rooted at the taxonomic IDs in the file.''')
 
     return parser.parse_args()
+
+
+def tally_only(metrics_tabulator, args, logger):
+    """
+    Tally kmers and pickle result. The output file can be loaded later and
+    be used to calculate metrics at a later stage. Metrics can also be
+    calculated on a combination of multiple pickles.
+    """
+
+    # Check output path and count kmers
+    pickle_output = metrics_tabulator.vet_output_path(args.output_pickle)
+    kmer_tally = metrics_tabulator.tally_kmers()
+
+    logger.info('Saving the kmer tally datastructure in {} ...'.format(
+        pickle_output))
+
+    # Pickle
+    pickle.dump(kmer_tally, open(pickle_output, 'wb'))
+
+    logger.info('Saved.')
+    logger.info('You can calculate quality metrics from this file at a ' + \
+                'later stage by calling krakmeopen with the --input_pickle ' + \
+                'or --input_file_list argument.')
 
 
 def setup_logging(log_level=logging.DEBUG):
@@ -103,21 +145,33 @@ def krakmeopen():
     logger = setup_logging()
 
     metrics_tabulator = MetricsTabulator(
-        classifications_file = args.input,
         names = args.names,
         nodes = args.nodes,
+        input_classifications = args.input,
         tax_id = args.tax_id,
         tax_id_file = args.tax_id_file)
 
-    # Tabulate metrics and output to file
-    metrics_df = metrics_tabulator.tabulate_metrics()
-    metrics_df.to_csv(args.output, sep='\t', index=False)
+    if args.output_pickle:
+        logger.info('Will not calculate quality metrics.')
+        tally_only(metrics_tabulator, args, logger)
 
-    # If user wants the full kmer tally to be output to file
-    if args.output_kmer_tally:
+    else:
+
+        # Tabulate metrics and output to file
+        metrics_df = metrics_tabulator.tabulate_metrics(
+            input_pickle=args.input_pickle,
+            input_file_list=args.input_file_list)
+        logger.info('Saving quality metrics to {}.'.format(args.output))
+        metrics_df.to_csv(args.output, sep='\t', index=False)
+
+    # If user wants a kmer tally table to be output to file (pd.DataFrame)
+    if args.kmer_tally_table:
+        logger.info('Saving human raedable kmer tallies in {}'.format(
+            args.kmer_tally_table))
         kmer_tally_df = metrics_tabulator.get_kmer_tally()
-        kmer_tally_df.to_csv(args.output_kmer_tally, sep='\t', index=False)
+        kmer_tally_df.to_csv(args.kmer_tally_table, sep='\t', index=False)
 
+    logger.info('Finished. Exiting KrakMeOpen.')
 
 if __name__ == '__main__':
     krakmeopen()
