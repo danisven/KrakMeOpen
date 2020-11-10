@@ -29,7 +29,9 @@ for example when you want to calculate metrics from multiple classifications. Th
 In the below example, calculate combined metrics for the clade rooted at human (9606) from two kraken 2 classifications (sample_1, sample_2). First tally the kmers from sample_1 and sample_2 by specifying --output_pickle. Then, calculate metrics and output the final result to combined_metrics.tsv. Note that the tax_id, names.dmp, and nodes.dmp must be the same in all calls.
 
 `krakmeopen --input sample_1.kraken2 --output_pickle sample_1_metrics.pickle --names names.dmp --nodes nodes.dmp --tax_id 9606`
+
 `krakmeopen --input sample_2.kraken2 --output_pickle sample_2_metrics.pickle --names names.dmp --nodes nodes.dmp --tax_id 9606`
+
 `krakmeopen --input_file_list pickle_file_list.txt --output combined_metrics.tsv --names names.dmp --nodes nodes.dmp --tax_id 9606`
 
 ## Quality metrics
