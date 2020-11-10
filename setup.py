@@ -18,5 +18,7 @@ setup(
         'License :: OSI Approved :: MIT',
         'Programming Language :: Python :: 3'],
     include_package_data=True,
+    install_requires=['pyyaml'],
+    python_requires='>=3.7',
     packages=find_packages(exclude=['contrib', 'docs', 'test*'], include=['krakmeopen']),
     entry_points={'console_scripts': ['krakmeopen=krakmeopen.krakmeopen:krakmeopen']})

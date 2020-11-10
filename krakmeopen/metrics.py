@@ -5,20 +5,15 @@ import logging
 import pathlib
 import pandas as pd
 from collections import Counter
-from krakmeopen.tally_kmers import KmerCounter
-from krakmeopen.utility_functions import read_file
+from krakmeopen.kmers import KmerCounter
+from krakmeopen.utilities import read_file
 from stringmeup.taxonomy import TaxonomyTree
 
 logger = logging.getLogger(__name__)
 
 
-class MetricsTabulatorArgumentException(Exception):
-    """Raised when a wrong or missing argument is given at instantiation."""
-    pass
-
-
 class MetricsTabulatorException(Exception):
-    """Raised when trying to use functionality that is not implemented yet."""
+    """Raised when an error occurs in MetricsTabulator."""
     pass
 
 
@@ -58,14 +53,12 @@ class MetricsTabulator:
     def __init__(self,
                  names,
                  nodes,
-                 input_classifications=None,
                  tax_id_file=None,
                  tax_id=None):
 
         self.tax_id_set = self.get_tax_ids(tax_id_file, tax_id)
-        self.classifications = self.vet_kraken2_input(input_classifications) \
-            if input_classifications else None
         self.taxonomy_tree = self.get_taxonomy(names, nodes)
+        self.kmer_tally = None
 
         # Dictionary mappings of clade root taxIDs to children,
         # and clade children to clade root taxIDs
@@ -75,6 +68,7 @@ class MetricsTabulator:
     def get_taxonomy(self, names, nodes):
         """Build a taxonomy tree from names and nodes"""
 
+        logger.info('Creating taxonomy...')
         taxonomy_tree = TaxonomyTree(
             names_filename=names,
             nodes_filename=nodes)
@@ -93,55 +87,50 @@ class MetricsTabulator:
     def get_kmer_tally(self):
         """Returns a pandas.DataFrame object representing the self.kmer_tally"""
 
-        kmer_tally_df = self.make_data_frame(self.kmer_tally)
+        if self.kmer_tally:
+            kmer_tally_df = self.make_data_frame(self.kmer_tally)
+            return kmer_tally_df
 
-        return kmer_tally_df
+        else:
+            msg = 'There is no kmer tally available. Run tabulate_metrics() first.'
+            raise MetricsTabulatorException(msg)
 
-    def combine_pickles(self, input_file_list):
-        """Add kmer counts from multiple pickles."""
+    def tabulate_metrics(self, input_classifications=None, input_pickle=None, input_file_list=None, tally_only=False):
+        """
+        Main loop to calculate the metrics from a kmer tally.
 
-        logger.info('Combining kmer counts from pickles in {}'.format(
-            input_file_list))
+        Kmer tally can be created from
+            (1) self.classifications (kraken 2 output, set at instantiation)
+            (2) input_pickle (pickle file, created with krakmeopen --output_pickle)
+            (3) input_file_list (file with one pickle file name per line)
 
-        pickles_list = []
-        with read_file(input_file_list) as f:
-            for line in f:
-                pickles_list.append(line.strip())
+        Give tally_only=FILE to output only a pickle file and no metrics.
+        """
 
-        logger.info('Loading pickled kmer counts into memory...')
-        kmer_tally = Counter()
-        for i, pickle_file in enumerate(pickles_list):
-            pickle_info = pickle.load(open(pickle_file, 'rb'))
-            kmer_tally.update(pickle_info)
-            logging.info('Loaded {} ({}/{})...'.format(
-                pickle_file, i+1, len(pickles_list)))
-
-        logger.info('Done.')
-
-        return kmer_tally
-
-    def tabulate_metrics(self, input_pickle=None, input_file_list=None):
-        """Main loop to calculate the metrics."""
+        inputs = [input_classifications, input_pickle, input_file_list]
 
         if input_pickle and input_file_list:
             msg = 'Cannot input a pickle file and a list of files at the same time.'
-            raise MetricsTabulatorArgumentException(msg)
-
-        elif input_file_list:
-            self.kmer_tally = self.combine_pickles(
-                input_file_list=input_file_list)
-
-        elif input_pickle:
-            self.kmer_tally = self.tally_kmers(input_pickle=input_pickle)
-
-        elif self.classifications:
-            self.kmer_tally = self.tally_kmers()
-
-        else:
-            msg = 'Must have either kraken 2 classifications at ' + \
-                  'instantiation, or a pickle file or a list of pickles ' + \
-                  'when calling tabulate_metrics'
             raise MetricsTabulatorException(msg)
+
+        elif all(f is None for f in inputs):
+            msg = 'Must supply an input for MetricsTabulator.tabulate_metrics()'
+            raise MetricsTabulatorException(msg)
+
+        kmer_counter = KmerCounter(
+            self.tax_id_set,
+            self.clade_roots2children_map,
+            self.children2clade_roots_map)
+        kmer_counter.tally_kmers(
+            classifications=input_classifications,
+            read_pickle=input_pickle,
+            read_pickle_list=input_file_list,
+            output_pickle=tally_only)
+        self.kmer_tally = kmer_counter.get_tally()
+
+        # If only tallying kmers (no metrics) and saving as pickle
+        if tally_only:
+            return
 
         logger.info('Tabulating classification metrics per clade...')
 
@@ -163,36 +152,10 @@ class MetricsTabulator:
                 logger.info('Processed {}/{} clades ({}%)...'.format(
                     i+1, n_taxa, round((i+1)/n_taxa*100)))
 
-        logger.info('Finished tabulating metrics.')
-
         logger.info('Converting result to table...')
         metrics_df = self.make_data_frame(metrics_dict)
-        logger.info('Done.')
 
         return metrics_df
-
-    def tally_kmers(self, input_pickle=None):
-        """
-        Get the kmer tallies from a KmerCounter object, or read a pickle.
-        """
-
-        # If kmer tallies are being read from a pickle (Not Implemented)
-        if input_pickle:
-            logger.info('Reading already tallied kmers from {}'.format(input_pickle))
-            result = self.read_tally_pickle(input_pickle)
-            logger.info('Done.')
-
-        else:
-            logger.info('Tallying kmers...')
-            kmer_counter = KmerCounter(
-                self.tax_id_set,
-                self.clade_roots2children_map,
-                self.children2clade_roots_map)
-            kmer_counter.tally_kmers(self.classifications)
-            result = kmer_counter.get_tally()
-            logger.info('Done tallying.')
-
-        return result
 
     def clade_mappings(self):
         """
@@ -205,7 +168,7 @@ class MetricsTabulator:
         of the specific clade.
         """
 
-        logger.info('Creating maps of clades rooted at supplied tax IDs...')
+        logger.info('Creating clade maps...')
 
         # Main dictionary mappings
         children2clade_roots_map = {}
@@ -225,8 +188,6 @@ class MetricsTabulator:
 
             # Update the clade roots to members dictionary mapping
             clade_roots2children_map[tax_id] = clade_tax_ids
-
-        logger.info('Done.')
 
         return clade_roots2children_map, children2clade_roots_map
 
@@ -427,116 +388,3 @@ class MetricsTabulator:
             tax_id_set.add(tax_id)
 
         return tax_id_set
-
-    def vet_kraken2_input(self, filename):
-        """
-        Check if the given input file exists, and if it appears to be of
-        correct format (a kraken2 classifications file).
-
-        Returns a pathlib.Path object if everything is OK, raises
-        MetricsTabulatorArgumentException if not.
-        """
-
-        putative_path = pathlib.Path(filename)
-
-        if putative_path.exists():
-            if putative_path.is_file():
-                self.conforms_to_kraken2_format(putative_path)
-            else:
-                msg = ('The given kraken2 classifications file is not ' + \
-                'infact a file. You input {}.'.format(putative_path))
-                raise MetricsTabulatorArgumentException(msg)
-
-        else:
-            msg = ('Could not find the specified kraken2 classifications ' + \
-            'file. You input {}.'.format(putative_path))
-            raise MetricsTabulatorArgumentException(msg)
-
-        return putative_path
-
-    def conforms_to_kraken2_format(self, kraken2_file):
-        """
-        Raises an error if the file doesn't conform to certain properties
-        of a Kraken2 classifications file.
-        """
-
-        logger.debug('Validating input classifications file...')
-        with read_file(kraken2_file) as f:
-            line = f.readline()
-            line_elements = line.strip().split('\t')
-
-            # Number of columns as expected?
-            # 5 columns in a file from Kraken2
-            # 6 columns when using the fork of Kraken2, see
-            # https://github.com/danisven/StringMeUp
-            num_cols = len(line_elements) in [5, 6]
-
-            # Line must start with C or U (as in Classified/unclassified)
-            line_start = line_elements[0] in ['U', 'C']
-
-            # Is the data paired or not?
-            paired_input = '|' in line_elements[3]
-
-            if paired_input:
-                kmer_string_ok = len(line_elements[-1].split('|:|')) == 2
-                read_len_ok = len(line_elements[3].split('|')) == 2
-            else:
-                # Last column should contain colons between kmer/taxon pairs
-                kmer_string_ok = ":" in line_elements[-1]
-
-                # Read length column should be convertable to int
-                try:
-                    int(line_elements[3])
-                except ValueError:
-                    read_len_ok = False
-                else:
-                    read_len_ok = True
-
-            if num_cols and line_start and read_len_ok and kmer_string_ok:
-                logger.debug('Validation OK.')
-                return
-            else:
-                msg = ("The given file ({}) doesn't appear to be a " + \
-                       "kraken2 classifications file.".format(kraken2_file))
-                logger.debug('First line of input: {}'.format(line))
-                logger.debug('num_cols: {}'.format(num_cols))
-                logger.debug('line_start: {}'.format(line_start))
-                logger.debug('read_len_col: {}'.format(read_len_ok))
-                logger.debug('kmer_string: {}'.format(kmer_string_ok))
-                raise MetricsTabulatorArgumentException(msg)
-
-    def read_tally_pickle(self, input_pickle):
-        """
-        Read a pickle file created with count_kmers.py.
-        """
-        kmer_tally = pickle.load(input_pickle, 'rb')
-        return kmer_tally
-
-    def vet_output_path(self, filename):
-        """
-        Check if the given output file name is OK. Return the path as a
-        pathlib.Path object if it is, else will raise
-        MetricsTabulatorArgumentException.
-        """
-
-        putative_path = pathlib.Path(filename)
-
-        if putative_path.exists():
-            if putative_path.is_dir():
-                msg = ("The given output filename ({}) is a directory. " +
-                        "You need to specify a file.".format(putative_path))
-                raise MetricsTabulatorArgumentException(msg)
-
-            else:
-                msg = ("The given output filename ({}) already exists. " +
-                       "I won't overwrite it. Remove it or specify another " +
-                       "output file, then retry.".format(putative_path))
-                raise MetricsTabulatorArgumentException(msg)
-
-        else:
-            if not putative_path.parent.is_dir():
-                msg = ("The given output filename ({}) suggests writing to " +
-                      "a directory that doesn't exist.".format(putative_path))
-                raise MetricsTabulatorArgumentException(msg)
-            else:
-                return putative_path

@@ -3,16 +3,15 @@
 __version__ = "0.1.0"
 
 import yaml
-import pickle
 import logging
 import logging.config
 import argparse
-from krakmeopen import conf
-from krakmeopen.log_formatter import CustomFormatter
-from krakmeopen.quality_metrics import MetricsTabulator
 import importlib.resources as pkg_resources
+from krakmeopen import conf
+from krakmeopen.formatter import CustomFormatter
+from krakmeopen.metrics import MetricsTabulator
+from krakmeopen.utilities import vet_input_path, vet_output_path, vet_kraken2_file
 
-# TODO: requires pyyaml
 
 def get_arguments():
     """
@@ -108,34 +107,45 @@ def get_arguments():
     return parser.parse_args()
 
 
-def tally_only(metrics_tabulator, args, logger):
+def check_file_paths(args):
     """
-    Tally kmers and pickle result. The output file can be loaded later and
-    be used to calculate metrics at a later stage. Metrics can also be
-    calculated on a combination of multiple pickles.
+    Check that input files exist, and that output files do not. Check that
+    output files are written to directories that exist.
     """
+    input_files = [
+        args.input,
+        args.input_pickle,
+        args.input_file_list,
+        args.names,
+        args.nodes,
+        args.tax_id_file]
 
-    # Check output path and count kmers
-    pickle_output = metrics_tabulator.vet_output_path(args.output_pickle)
-    kmer_tally = metrics_tabulator.tally_kmers()
+    output_files = [args.output, args.output_pickle, args.kmer_tally_table]
 
-    logger.info('Saving the kmer tally datastructure in {} ...'.format(
-        pickle_output))
+    # Remove paths that weren't given by the user
+    input_files = [path for path in input_files if path is not None]
+    output_files = [path for path in output_files if path is not None]
 
-    # Pickle
-    pickle.dump(kmer_tally, open(pickle_output, 'wb'))
+    for input in input_files:
+        vet_input_path(input)
 
-    logger.info('Saved.')
-    logger.info('You can calculate quality metrics from this file at a ' + \
-                'later stage by calling krakmeopen with the --input_pickle ' + \
-                'or --input_file_list argument.')
+    for output in output_files:
+        vet_output_path(output)
+
+    if args.input:
+        vet_kraken2_file(args.input)
 
 
-def setup_logging(log_level=logging.DEBUG):
+def setup_logging():
+    """
+    Set up loggers from config file (conf/log_config.yaml).
+    """
     conf_content = pkg_resources.read_text(conf, 'log_config.yaml')
     log_config = yaml.safe_load(conf_content)
     logging.config.dictConfig(log_config)
     logger = logging.getLogger(__name__)
+    logger.debug('Logger created.')
+
     return logger
 
 
@@ -144,29 +154,33 @@ def krakmeopen():
     args = get_arguments()
     logger = setup_logging()
 
+    logger.debug('Checking if input and output file paths are OK...')
+    check_file_paths(args)
+
     metrics_tabulator = MetricsTabulator(
         names = args.names,
         nodes = args.nodes,
-        input_classifications = args.input,
         tax_id = args.tax_id,
         tax_id_file = args.tax_id_file)
 
+    metrics_df = metrics_tabulator.tabulate_metrics(
+        input_classifications=args.input,
+        input_pickle=args.input_pickle,
+        input_file_list=args.input_file_list,
+        tally_only=args.output_pickle)  # metrics_df=NoneType if tally_only
+
     if args.output_pickle:
-        logger.info('Will not calculate quality metrics.')
-        tally_only(metrics_tabulator, args, logger)
-
+        logger.info(
+            'Will not calculate quality metrics. You can calculate quality ' + \
+            'metrics from the pickle at a later stage by calling krakmeopen ' + \
+            'with the --input_pickle or --input_file_list argument.')
     else:
-
-        # Tabulate metrics and output to file
-        metrics_df = metrics_tabulator.tabulate_metrics(
-            input_pickle=args.input_pickle,
-            input_file_list=args.input_file_list)
-        logger.info('Saving quality metrics to {}.'.format(args.output))
+        logger.info('Saving quality metrics to {}...'.format(args.output))
         metrics_df.to_csv(args.output, sep='\t', index=False)
 
     # If user wants a kmer tally table to be output to file (pd.DataFrame)
     if args.kmer_tally_table:
-        logger.info('Saving human raedable kmer tallies in {}'.format(
+        logger.info('Saving human raedable kmer tallies in {}...'.format(
             args.kmer_tally_table))
         kmer_tally_df = metrics_tabulator.get_kmer_tally()
         kmer_tally_df.to_csv(args.kmer_tally_table, sep='\t', index=False)

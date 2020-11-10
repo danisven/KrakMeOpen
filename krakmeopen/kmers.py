@@ -4,19 +4,14 @@ import logging
 import pathlib
 import pickle
 from collections import Counter
-from krakmeopen.utility_functions import read_file
+from krakmeopen.utilities import read_file, vet_input_path, vet_output_path, vet_kraken2_file
 from stringmeup.taxonomy import TaxonomyTree
 
 logger = logging.getLogger(__name__)
 
 
-class KmerCounterFaultyArgumentsError(Exception):
-    """Raised when a wrong or missing argument is given at instantiation."""
-    pass
-
-
-class KmerCounterNotImplementedError(Exception):
-    """Raised when trying to use functionality that is not implemented yet."""
+class KmerCounterException(Exception):
+    """Raised when an error occurs in KmerCounter."""
     pass
 
 
@@ -41,15 +36,15 @@ class KmerCounter:
     kmer_counter = KmerCounter(
         tax_id_set,
         clade_roots2children_map,
-        children2clade_roots_map)  # Initialize
-    kmer_counter.tally_kmers(kraken2_classifications_file)  # Start counting
+        children2clade_roots_map)      # Initialize
+    kmer_counter.tally_kmers()         # Start counting
     result = kmer_counter.get_tally()  # Get the result
     """
 
     def __init__(self, tax_id_set, clade_roots2children_map, children2clade_roots_map):
 
         self.tax_id_set = tax_id_set
-        self.nfiles_processed = 0
+        self.has_tally = False
 
         # Dictionary mappings of clade root taxIDs to children,
         # and clade children to clade root taxIDs
@@ -59,64 +54,119 @@ class KmerCounter:
         # Main data structure to hold the kmer counts for each taxon.
         # Using the Counter class from collections. When updating it, it will
         # automatically add together the values of the matching keys.
-        self.kmer_tallies = {
-            tax_id: Counter() for tax_id in self.tax_id_set
-        }
+        self.kmer_tally = {
+            tax_id: Counter() for tax_id in self.tax_id_set}
 
-    def tally_kmers(self, classifications_path, output_pickle_path=None):
+    def tally_kmers(self, classifications=None, read_pickle=None, read_pickle_list=None, output_pickle=None):
         """
         Function to count kmers and return a final result.
 
-        Takes a kraken2 classifications filename (pathlib.Path).
+        Input one of
+            (1) a kraken2 classifications filename
+            (2) a pickle of kmer tallies created with this function (see below)
+            (3) a file containing a list of pickle filenames (one per line)
 
-        Optionally takes a filename (pathlib.Path) to pickle the kmer counts
+        Optionally takes a filename to pickle the kmer counts
         from the given classifications file to.
         """
 
-        # Check inputs
-        files = [path for path in [classifications_path, output_pickle_path]
-                 if path is not None]
-        for putative_path in files:
-            if not isinstance(putative_path, pathlib.Path):
-                msg = ('Paths to files must be pathlib.Path objects.')
-                raise KmerCounterFaultyArgumentsError(msg)
+        if self.has_tally:
+            logger.warning('Will overwrite current kmer tally.')
 
-        logger.info('Processing file {}...'.format(classifications_path.name))
+        # Depending on type of input, get kmer tally
+        if classifications:
+            # From kraken 2 classifications
+            classifications = vet_input_path(classifications)
+            vet_kraken2_file(classifications)
+            logger.info('Tallying kmers from {}...'.format(
+                classifications.name))
+            self.tally_per_clade(classifications)  # Count kmers
 
-        # When adding kmer counts from multiple files
-        if self.nfiles_processed > 0:
-            raise KmerCounterNotImplementedError('You tried to add multiple results.')
-            logger.info('Adding kmer counts from an additional file.')
-            logger.debug('Creating a copy of main self.kmer_tallies ' + \
-                         'to compare with after counting this file.')
+        elif read_pickle:
+            # From a kmer_tally saved in a pickle
+            logger.info('Reading already tallied kmers from {}...'.format(
+                read_pickle))
+            read_pickle = vet_input_path(read_pickle)
+            self.kmer_tally = pickle.load(open(read_pickle, 'rb'))
 
-        # Count the kmers
-        self.tally_per_clade(classifications_path)
+        elif read_pickle_list:
+            # From multiple pickles, add together to one kmer_tally
+            read_pickle_list = vet_input_path(read_pickle_list)
+            logger.info('Will combine kmer counts from pickles in {}.'.format(
+                read_pickle_list))
+            self.kmer_tally = self.combine_pickles(read_pickle_list)
 
-        if output_pickle_path:
-            raise KmerCounterNotImplementedError('You tried to save output.')
-            logger.info('Pickling result to {}'.format(output_pickle))
+        else:
+            msg = 'You need to input one of [\'classifications\', ' + \
+                  '\'read_pickle\', \'read_pickle_list\'].'
+            raise KmerCounterException(msg)
 
-        self.nfiles_processed += 1
+        self.has_tally = True
+
+        if output_pickle:
+            output_pickle = vet_output_path(output_pickle)
+            logger.info('Saving the kmer tally datastructure in {}...'.format(
+                output_pickle))
+            pickle.dump(self.kmer_tally, open(output_pickle, 'wb'))
+
+    def combine_pickles(self, input_file_list):
+        """Add kmer counts from multiple pickles."""
+
+        pickles_list = []
+        with read_file(input_file_list) as f:
+            for line in f:
+                pickles_list.append(line.strip())
+
+        kmer_tally = {tax_id: Counter() for tax_id in self.tax_id_set}
+
+        for i, pickle_file in enumerate(pickles_list):
+            pickle_data = self.load_pickle(pickle_file)
+
+            for tax_id, pickled_tally in pickle_data.items():
+                kmer_tally[tax_id].update(pickled_tally)
+
+            logger.info('Loaded kmer tally from {} ({}/{})...'.format(
+                pickle_file, i+1, len(pickles_list)))
+
+        return kmer_tally
+
+    def load_pickle(self, pickle_file):
+        """Load a pickle and return it. Check that the tax_ids are the same."""
+
+        def taxa_error():
+            msg = 'Pickle files appear to have been created with ' + \
+                  'different tax_ids as clade definitions. Make ' + \
+                  'sure to always use the same tax_ids when ' + \
+                  'tallying kmers and calculating metrics.'
+            raise KmerCounterException(msg)
+
+        pickle_data = pickle.load(open(pickle_file, 'rb'))
+
+        # The taxa in the pickle should be the same as in self.tax_id_set
+        same_taxa = pickle_data.keys() == self.tax_id_set
+        if not same_taxa:
+            taxa_error()
+
+        return pickle_data
 
     def get_tally(self):
         """
-        Getter for self.kmer_tallies.
+        Getter for self.kmer_tally.
         """
 
-        if self.nfiles_processed > 0:
-            return self.kmer_tallies
-        else:
-            logger.warning('Have not counted kmers yet. Run tally_kmers first.')
-            return None
+        if not self.has_tally:
+            msg = 'Have not counted kmers yet. Run tally_kmers first.'
+            raise KmerCounterException(msg)
+
+        return self.kmer_tally
 
     def tally_per_clade(self, input_file):
         """
-        Parse the input file. For all clades rooted at the tax_ids in
+        Parse a classifications file. For all clades rooted at the tax_ids in
         self.tax_id_set, find all reads that are classified there and count
         the kmers and where they hit.
 
-        Saves info in the main datastructure (self.kmer_tallies), which is a
+        Saves info in the main datastructure (self.kmer_tally), which is a
         dict of Counters that have the clade root tax_ids as keys. The Counters
         will in turn contain keys for all tax_ids that kmers have hit, and values
         that represent how many that kmers hit the specific tax_id.
@@ -177,7 +227,7 @@ class KmerCounter:
                     kmer_dict = self.process_kmer_string(kmer_string, paired_input)
 
                     # Add the read's kmer information to the main datastructure
-                    self.kmer_tallies[tax_id_root].update(kmer_dict)
+                    self.kmer_tally[tax_id_root].update(kmer_dict)
 
                 i += 1
                 if i % report_frequency == 0:
