@@ -15,11 +15,11 @@ loggers:
     level: INFO
     handlers: [console]
     propagate: no
-  quality_metrics:
+  metrics:
     level: INFO
     handlers: [console]
     propagate: no
-  tally_kmers:
+  kmers:
     level: INFO
     handlers: [console]
     propagate: no
