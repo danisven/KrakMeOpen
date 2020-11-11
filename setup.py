@@ -1,5 +1,5 @@
 from setuptools import setup, find_packages
-from krakmeopen.krakmeopen import __version__
+from krakmeopen import __version__
 
 setup(
     name="KrakMeOpen",
