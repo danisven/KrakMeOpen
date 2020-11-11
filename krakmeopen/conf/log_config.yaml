@@ -1,7 +1,7 @@
 version: 1
 formatters:
   custom_formatter:
-    (): krakmeopen.log_formatter.CustomFormatter
+    (): krakmeopen.formatter.CustomFormatter
     fmt: "%(asctime)s : %(name)s : %(levelname)-10s %(msg)s"  # default fmt
     info_format: '%(asctime)s : %(levelname)-10s %(msg)s'     # INFO specific format
     datefmt: "%Y-%m-%d [%H:%M:%S]"                            # datefmt for all levels
