@@ -3,7 +3,7 @@
 A [Kraken 2] downstream analysis toolkit. More specifically, calculate a series of quality metrics for Kraken 2 classifications.
 
 ## Installation
-KrakMeOpen _will soon be_ available to install through conda. Simply run the following command to install it:
+KrakMeOpen is available to install through conda. Simply run the following command to install it:
 
 `conda install -c conda-forge -c bioconda krakmeopen`
 
