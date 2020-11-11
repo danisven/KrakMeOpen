@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-__version__ = "v0.1.2"
-
 import yaml
 import logging
 import logging.config
