@@ -49,7 +49,7 @@ The following metrics are calculated:
 | nkmers_unclassified | Total number of unclassified kmers |
 | nkmers_clade | Total number of kmers classified to any tax ID within the clade |
 | nkmers_lineage | Total number of kmers classified to any tax ID directly above the clade root tax ID |
-| confidence_origin | The confidence score for the clade, calculated as described by Kraken2 |
+| confidence_original | The confidence score for the clade, calculated as described by Kraken2 |
 | confidence_classified | An alternative confidence score where the unclassified kmers are removed from the denominator |
 | other_kmers_lineage_ratio | Ratio of nkmers_lineage / (nkmers_total - nkmers_clade) |
 | other_kmers_root_ratio | Ratio of "kmers classified to root" / (nkmers_total - nkmers_clade) |
