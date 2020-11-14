@@ -2,6 +2,8 @@
 
 A [Kraken 2] downstream analysis toolkit. More specifically, calculate a series of quality metrics for Kraken 2 classifications.
 
+To apply any confidence score stringency for your Kraken 2 classifications, try out [StringMeUp].
+
 ## Installation
 KrakMeOpen is available to install through conda. Simply run the following command to install it:
 
