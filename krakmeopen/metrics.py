@@ -215,7 +215,9 @@ class MetricsTabulator:
             'other_kmers_root_ratio': None,
             'other_kmers_classified_ratio': None,
             'other_kmers_distance': None,
-            'other_kmers_distance_lineage_excluded': None}
+            'other_kmers_distance_lineage_excluded': None,
+            'other_kmers_intra_distance': None,
+            'other_kmers_intra_distance_lineage_excluded': None}
 
         # Get the relevant kmers
         clade_kmers_tally = self.kmer_tally[clade_id]
