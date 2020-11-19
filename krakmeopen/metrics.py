@@ -291,6 +291,7 @@ class MetricsTabulator:
 
         # Getting distance metrics
         distance_dict = {tax_id: None for tax_id in other_kmers if tax_id != 0}  # We can't calculate a distance to 'Unclassified' (tax_id = 0)
+        other_kmers_intra_distance_dict = {tax_id: None for tax_id in other_kmers if tax_id != 0}
         for tax_id in distance_dict:
 
             # The tax_id is an ancestor of the clade root
