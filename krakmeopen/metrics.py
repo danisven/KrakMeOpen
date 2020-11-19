@@ -294,39 +294,8 @@ class MetricsTabulator:
         other_kmers_intra_distance_dict = {tax_id: None for tax_id in other_kmers if tax_id != 0}
         for tax_id in distance_dict:
 
-            # The tax_id is an ancestor of the clade root
-            if tax_id in lineage:
-
-                # The distance between the clade root and the ancestor
-                distance = self.taxonomy_tree.get_distance(tax_id, clade_id)
-
-            # Not an ancestor, must compute two distances and add them together
-            else:
-
-                # Get the lineage of the tax_id
-                tax_id_lineage = self.taxonomy_tree.get_lineage([tax_id])[tax_id]
-                tax_id_lineage.reverse()  # Flip the lineage so that it goes from leaf to root
-
-                # Loop to find the lowest common ancestor (lca) of the clade id and
-                # the tax_id that we are currently getting the distance to
-                lca = None
-                for ancestor in tax_id_lineage:
-                    if ancestor in lineage:
-                        lca = ancestor
-                        break
-
-                # Find the distance between the lca and the clade id
-                clade_lca_distance = self.taxonomy_tree.get_distance(ancestor, clade_id)
-
-                # Find the distance between the lca and the tax_id currently
-                # being investigated
-                tax_id_lca_distance = self.taxonomy_tree.get_distance(ancestor, tax_id)
-
-                # The distance between the clade id and the tax_id is the sum of
-                # the two distances
-                distance = clade_lca_distance + tax_id_lca_distance
-
-            # Save the distance between the clade id and the tax_id
+            # Calc and save the distance between the clade_id and the tax_id
+            distance = self.taxonomy_tree.get_distance(tax_id, clade_id)
             distance_dict[tax_id] = distance
 
         # Multiply the distances with the number of kmers for each tax_id
