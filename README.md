@@ -58,6 +58,8 @@ The following metrics are calculated:
 | other_kmers_classified_ratio | Ratio of (nkmers_total - nkmers_clade - nkmers_unclassified) / (nkmers_total - nkmers_clade) |
 | other_kmers_distance | Average distance between the clade root tax ID and the tax IDs which kmers are classified to |
 | other_kmers_distance_lineage_excluded | Like other_kmers_distance but kmers classified to tax IDs above the clade are excluded |
+| other_kmers_intra_distance | Average distance between kmers classified outside the clade |
+| other_kmers_intra_distance_lineage_excluded | Like other_kmers_intra_distance but kmers classified above the clade are excluded |
 
 [Kraken 2]: https://github.com/DerrickWood/kraken2
 [StringMeUp]: https://github.com/danisven/stringmeup
