@@ -321,10 +321,13 @@ class MetricsTabulator:
         # Getting distances between other_kmers themselves
         other_kmers_weighted_intra_dists = []
         other_kmers_weighted_intra_dists_lineage_excl = []
+        sum_kmers_intra_distance = 0
+        sum_kmers_intra_distance_lineage_excl = 0
         for taxon_1, taxon_2 in combinations(distance_dict, r=2):
 
             # Total number of kmers between taxon 1 and 2
             sum_kmers = other_kmers[taxon_1] + other_kmers[taxon_2]
+            sum_kmers_intra_distance += sum_kmers
 
             # Calc a weighted distance based on distance and total kmers
             distance = self.taxonomy_tree.get_distance(taxon_1, taxon_2)
@@ -336,14 +339,15 @@ class MetricsTabulator:
             # Keep any weighted distances that are between taxa not in the lineage
             if (taxon_1 not in lineage) and (taxon_2 not in lineage):
                 other_kmers_weighted_intra_dists_lineage_excl.append(weighted_distance)
+                sum_kmers_intra_distance_lineage_excl += sum_kmers
 
         # Calculate average distances for other_kmers
         other_kmers_intra_distance = (
-            sum(other_kmers_weighted_intra_dists) / num_other_kmers_classified) \
+            sum(other_kmers_weighted_intra_dists) / sum_kmers_intra_distance) \
             if num_other_kmers_classified > 0 else None
 
         other_kmers_intra_distance_lineage_excluded = (
-            sum(other_kmers_intra_distance_lineage_excluded) / (num_other_kmers_classified - num_lineage_kmers)) \
+            sum(other_kmers_weighted_intra_dists_lineage_excl) / sum_kmers_intra_distance_lineage_excl) \
             if (num_other_kmers_classified - num_lineage_kmers) > 0 else None
 
         # Save the values of all variables
